@@ -1,2 +1,2 @@
-# NLTAWorkshop
-Data and scripts for the Nonlinear Timeseries Analysis workshops
+# NLTA Part 1 - Seminar
+Data and scripts for the Nonlinear Timeseries Analysis Seminar, Part 1
