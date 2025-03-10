@@ -1,0 +1,186 @@
+---
+title: "Distance Plots"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("crqa",               # R packages needed here
+                     "devtools",
+                     "here",
+                     "magrittr",
+                     "nonlinearTseries",    # Update of nonlinearAnalysis
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 4 - Distance Plots.Rmd") # To help find all the files.
+
+install_github("barneyricca/ndstools")      # Specialized NLTS tools
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+```{r sampleDP}
+
+1:200 -> t
+49.5 * sin(t/6) * sin(t/80) + 1 -> x
+
+plot(t, x, 
+     type = 'l', 
+     lwd = 2)
+
+outer(X = x,
+      Y = x,
+      FUN = "-") ->
+  x_dist
+
+colorRampPalette(c("blue",                  # Create a color palette from
+                   "yellow"),                 #  blue to gold
+                 alpha = TRUE) ->           # 
+  this_palette
+this_palette(100) ->                        # Create discrete color values 
+  topo_colors
+
+image(x = t,
+      y = t,
+      z = x_dist,
+      zlim = range(x_dist),
+      col = topo_colors,
+      xaxt = 'n',
+      yaxt = 'n',
+      xlab = "",
+      ylab = "")
+
+```
+
+Back to Slide Deck
+
+# TDA
+
+```{r}
+
+```
+
+
+# Distance Plots with TDA
+
+
+Mengsen Zhang posted the data and Matlab code for Zhang et al. on [GitHub](https://github.com/mengsenz/TopoDynamics/tree/master). If you have Matlab on your computer, you can run Matlab from R, or simply go to Matlab and run Zhang's code. However, let's do the TDA stuff in R.
+
+I copied the code, and used AI to convert it to R, then did some cleaning up (e.g., translated Matlab functions, corrected mistakes in the translation, etc.). This is what results.
+
+```{r ZhangFigure8}
+#
+# This script provides an example analysis for the paper "Topological
+# portraits of multiscale coordination dynamics" by Mengsen Zhang, William D.
+# Kalies, J. A. Scott Kelso, and Emmanuelle Tognoli. It produces results
+# shown in Fig 8 of the paper.
+#
+# ~~ created by Mengsen Zhang <mengsenzhang@gmail.com> 2020. ~~
+#
+# BPR used on online AI tool to convert Mengsen's Matlab code to R, and then 
+#  modified the result to arrive at the code here. Obviously, any problems are
+#  solely due to BPR and should not reflect poorly on Zhang.
+#
+
+# ===== dependencies =====
+library(R.matlab)
+
+# ===== preprocess data =====
+# load either of the two files for data of examples trials: 
+# "data/data_3agents.mat" or "data/data_8agents.mat"
+raw_dat <- readMat(here("Data/data_8agents.mat"))
+
+theta_original <- fullSqr2phase(raw_dat, 
+                                FALSE, 
+                                list('spline', NA)) 
+# convert movement data to phase time series
+
+# ===== persistent homology and recurrence plots =====
+# --- parameters to extract the relevant time series
+t0 <- EVENTS[3] # (s) onset of the social interaction period
+tlimits <- c(1, 48) # (s) period for recurrence analysis
+ds <- 25 # rate of down-sampling
+
+# --- parameters for persistent homology
+rmin <- 0.1 # smallest scale considered
+rmax <- 0.5 # largest scale considered
+stepsize <- 0.005 # resolution of scales
+Lpnorm <- -1 # norm for compare persistent landscapes (-1=infty)
+
+# --- regularization parameter for frequency-phase decomposition
+beta <- 0.5
+
+# --- parameters for windowing the frequency-phase graph
+winsize <- 2
+lag <- 1
+
+# -- decompose original phase to a slow frequency component + a fast residual phase component
+tt <- seq(tlimits[1] + t0, t0 + tlimits[2] + 1, by = winsize)
+freq_theta <- thetaDecompose(theta_original, tt, sr, regularization = beta)
+freq <- freq_theta[[1]]
+theta_res <- freq_theta[[2]]
+theta_res <- 2 * pi * theta_res
+
+# -- segment frequency-phase graph into windows
+theta_win <- windowdata(theta_res, winsize * sr, lag * sr)
+freq_win <- windowdata(freq, winsize * sr, lag * sr)
+t_win <- t_win / sr
+X <- array(NA, dim = c(ncol(theta_win), 3, nrow(theta_win)))
+X[, 1, ] <- t(theta_win)
+X[, 2, ] <- t(freq_win)
+X[, 3, ] <- t(t_win - matrix(t_win[, 1], nrow = nrow(t_win), ncol = ncol(t_win), byrow = TRUE))
+X <- X[seq(1, dim(X)[1], ds), , ] # downsampling
+
+# -- define distance
+# distance between points in a point cloud (for topological analysis)
+d_pt <- function(x, y) {
+  norm(c(wrapToPi(x[1] - y[1]) / (2 * pi),
+         x[2] - y[2],
+         x[3] - y[3]), type = "2")
+}
+
+# distance for point-wise recurrence plot (non-topological)
+d_recur <- function(x, y) {
+  norm(c(wrapToPi(x[1:(length(x) / 3)] - y[1:(length(x) / 3)]) / (2 * pi),
+         x[(length(x) / 3 + 1):(length(x) * 2 / 3)] - y[(length(x) / 3 + 1):(length(x) * 2 / 3)],
+         x[(length(x) * 2 / 3 + 1):length(x)] - y[(length(x) * 2 / 3 + 1):length(x)]), type = "2")
+}
+
+# --- compute topological recurrence and pointwise            
+result <- topoRecur(X[, , t_win[, 1] > t0], 
+                    SR = 1, tlim = tlimits, distfun = d_pt, recurdist = d_recur,
+                    r_max = rmax, initialstep = rmin, stepsize = stepsize, topodist = Lpnorm)
+distmatpd0 <- result[[1]]
+distmatpd1 <- result[[2]]
+distmatrecur <- result[[3]]
+pd0 <- result[[4]]
+pd1 <- result[[5]]
+tlim <- result[[6]]
+
+# --- plotting the recurrence plots
+par(mfrow = c(1, 3), mar = c(5, 4, 4, 2) + 0.1)
+image(tlimits, tlimits, distmatpd0, axes = TRUE, xlab = 'time (s)', ylab = 'time (s)', main = 'H_0')
+image(tlimits, tlimits, distmatpd1, axes = TRUE, xlab = 'time (s)', ylab = 'time (s)', main = 'H_1')
+image(tlimits, tlimits, distmatrecur, axes = TRUE, xlab = 'time (s)', ylab = 'time (s)', main = 'pointwise')
+
+
+
+```
+

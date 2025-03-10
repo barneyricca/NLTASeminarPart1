@@ -1,0 +1,251 @@
+---
+title: "Fixed Point Recap"
+output: word_document
+date: "2025-01-16"
+---
+
+# (Some of) My Idiosyncracies
+
+1. Panes
+2. Color scheme
+3. Setup chunk
+4. assignment arrow directions
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+# R packages needed here:
+for(packageName in c("conflicted",
+                     "devtools",            # Load non-CRAN packages
+                     "doremi",              # Derivative estimators
+                     "here",                # File location help
+                     "magrittr",            # %$% pipe
+                     "phaseR",              # Phase space help
+                     "tidyverse")) {        # Data wrangling
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 1 - Fixed Point Recap.Rmd") # To help find all the files.
+
+# install_github("barneyricca/ntls_tools")    # Specialized NLTS tools
+# library(ntls_tools)
+
+install_github("barneyricca/ndstools",
+               force = TRUE)
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+
+conflicts_prefer(dplyr::filter)
+conflicts_prefer(dplyr::select)
+
+```
+
+# Data
+
+```{r loadData}
+load(here("Data/HRF.RData"))                # Original at https://osf.io/emwr9/
+
+read.csv(here("Data/ema.csv")) ->           # Data from trauma survivors.
+  ema_df                                    #  Lots of missingness!
+```
+
+```{r dataWrangling}
+ptsd_df %>%
+  filter(id == 1) %>%
+  select(id, hours, angry) ->
+  angry_df
+
+```
+
+Although this is *not* a course in *R* or data wrangling, *tidy data frames* are what are expected and these come in two flavors, *long* and *wide*. Each has their own use, and although we generally prefer long data frames for data analysis, researchers will often create wide data frames. 
+
+Additionally there are a number of data wrangling issues that are most easily accomplished by switching from wide to long, doing something, and switching back again.
+
+The switch between wide and long is known as *pivoting* and the ability to *pivot* between the flavors is a useful skill. Here is pivoting in action.
+
+The ema_df (for "ecological momentary assessment") data frame consists of data from 161 trauma survivors. These data are 31 days of two measures, coping self efficacy (9 questions) and post traumatic growth (10 questions). Each question on each day is in its own column, so the data frame is 161 rows by 590 columns. For analysis, we'll want a long data frame with just the ID, day, CSE total, and PTGI total. Here's one way to get there; there are other approaches using tidyverse functions and there are faster ways (e.g., using package:data.table or at the very least package:dtplyr); the latter can be vital when you have large datasets.
+
+```{r pivoting}
+#
+# Note that the original column names look like this: CSE_1.Day_12 where the
+#  first number (here, 1) is the question number and the second number (here,
+#  12) is the day on which that question was asked. In this dataset, a random
+#  subset of the items in each measure was asked each day. This shows up in
+#  the "names_pattern" parameter input.
+#
+ema_df %>%                                  # A wide data frame
+  pivot_longer(                             # pivot longer
+    cols = !Study_Id,                       # Don't pivot Study_Id
+    names_to = c("measure",                 # The three new column names. These
+                 "question",                #  correspond to the (.*) in the
+                 "day"),                    #  names_pattern. This is "regex"
+    names_pattern = "(.*)_(.*).Day_(.*)"    #  in case you need to know.
+  ) %>%
+  na.omit() %>%                             # Get rid of incomplete cases.
+  arrange(Study_Id, day) %>%                # Arrange these in a useful way.
+  group_by(Study_Id, measure, day) %>%      # Group by 3 variables
+  mutate(Value = sum(value,                 # Get a Value that is the sum of
+                     na.rm = TRUE)) %>%     #  the questions.
+  slice_head(n = 1) %>%                     # All will be the same. Use the 1st
+  ungroup() %>%                             # Ungroup the results
+  select(-question, -value) %>%             # Drop unneeded columns
+  mutate(day = as.numeric(day)) ->          # Convert character day to numeric.
+  ema_tots_df                               # Store this to allow for a demo
+                                            #  of pivot_wider().
+ema_tots_df %>%                             # Pick up where we left off.
+  pivot_wider(                              # Split CSE and PTGI
+    names_from = measure,                   # New column names.
+    values_from = Value) ->                 # Values for the new columns.
+  ema_long_df                               # This is what we want.
+
+str(ema_long_df)
+
+ema_tots_df %>%                             # Some things want wide data.
+  arrange(measure, day) %>%                 # arrange(), so the columns are
+                                            #  sorted.
+  pivot_wider(                              # New columns. One for each measure
+    names_from = c(measure, day),           #  and day.
+    values_from = Value) ->
+  ema_wide_df
+
+str(ema_wide_df)
+
+```
+
+For more on pivoting, look at the vignettes:
+```{r}
+#| eval: FALSE
+#| 
+vignette("pivot")
+```
+
+# Univariate Fixed Points
+
+Fixed points: Where the velocity (1st derivative) is zero.
+
+Estimate derivatives
+```{r}
+angry_df %>%
+  mutate(angry_level = calculate.fda(signal = angry,
+                                     time = hours)$dsignal[,1]) %>%
+  mutate(angry_velocity = calculate.fda(signal = angry,
+                                        time = hours)$dsignal[,2]) ->
+  angry_df
+```
+
+Find fixed points and stabilities using fixed_1d. package:phaseR has ways of finding 2d fixed points, but that takes more work.
+
+```{r}
+angry_df %$%
+  fixed_1d(angry_level,
+           angry_velocity) ->
+  angry_fp
+
+{
+  plot(angry_df$hours,
+       angry_df$angry_level,
+       type = 'l',
+       xlab = "Time (hours)",
+       ylab = "Angry Level")
+  abline(h = angry_fp$Level,
+         col = ifelse(angry_fp$Stability == "Stable",
+                      "blue", "orange"))
+}
+
+
+```
+
+Interpretation: ????
+
+Also, phaseR::phasePortrait() can help us here, although the use of GAM makes
+its use tricky.
+
+Can do multivariate fixed points nonparametrically too, but we won't do that here. That takes a lot more work, and usually something like package:phaseR.
+
+
+Back to PPT
+
+
+# Vector Fields and Nullclines
+
+If we have parametric models, things are easier. (That's one of the purposes of this seminar series, to produce parametric models.) We can use the parametric models and data to find nullclines (curves where one of the variables has zero velocity), plot vector fields, and find fixed points and their stabilities. For example, here's a basic "SIR" (Susceptible-Infected-Recovered/Removed) model:
+
+$\dot{x}=-\beta x y$
+$\dot{y}=\beta x y - v y$
+
+where: *x* is the fraction of *Susceptible* individuals in the population, *y* is the fraction of currently *Infected* individuals in the population, $\beta$ is the infection rate, and *v* is the recovery (or death, or combination,) rate. (There are more advanced SIR-type models, but this is easy to work with).
+
+Start with a population of 1 thousand, and 1 infected person. Let's find everything.
+
+```{r}
+# Incidentally, phaseR::SIR() looks like this:
+#
+# SIR <- function (t, y, parameters) 
+# {
+#     list(c(-parameters[1] * y[1] * y[2], 
+#            parameters[1] * y[1] * y[2] - parameters[2] * y[2]))
+# }
+#
+
+# Start with the vector field to visually find starting estimates for the
+#  fixed point(s)
+
+0.05 -> beta                                # Infection rate = 0.05
+0.1 -> v                                    # Recovery rate = 0.1
+
+flowField(SIR,
+          xlim = c(0,1),
+          ylim = c(0,1),
+          parameters = c(beta, v),          # Set above
+          add = FALSE) ->
+  SIR_flow
+
+nullclines(SIR,
+           xlim = c(0,1),
+           ylim = c(0,1),
+           parameters = c(beta, v)) ->      # Set above
+  SIR_null
+
+matrix(c(.10, .990,                         # Starting values for trajectories
+         .40, .960,
+         .80, .920,
+         .500, .500),
+       4,                                   # Notice there are 4 sets of
+       2,                                   #  starting values, each with 2
+       byrow = TRUE) ->                     #  variables, written across rows.
+  y0
+
+trajectory(SIR,
+           y0 = y0,
+           tlim = c(0, 100),
+           parameters = c(beta, v)) ->
+  SIR_traj
+```
+Yeah, okay, a lot of people end up Removed, and the infections die out. (At least, they do for these parameters in this model.)
+
+Now we can find some stabilities
+
+```{r}
+findEquilibrium(
+  deriv = SIR,
+  y0 = c(0.8, 0.2),
+  parameters = c(beta, v),
+  system = "two.dim",
+  summary = TRUE) ->
+  SIR_stab
+
+SIR_stab$ystar
+SIR_stab$classification
+```

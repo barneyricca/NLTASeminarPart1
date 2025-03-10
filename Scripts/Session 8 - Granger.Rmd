@@ -1,0 +1,72 @@
+---
+title: "Granger Causality"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "here",
+                     "lmtest",
+                     "NlinTS",
+                     "nonlinearTseries",
+                     "timeSeries")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 8 - Granger.Rmd")     # To help find all the files.
+
+# install_github("barneyricca/ndstools")    # Specialized NLTS tools
+# library(ndstools)
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+```{r data}
+read.csv() -> lh_df
+LPP2005REC -> df                            # 
+nonlinearTseries::lorenz() ->
+  l_df
+
+
+```
+
+# Granger causality
+
+```{r granger1}
+NlinTS::causality.test() # H0: 2nd ts does NOT cause the 1st
+```
+
+```{r granger2}
+lmtest::grangertest()
+```
+
+# VARNN
+```{r}
+NlinTS::nlin_causality.test(, # H0: 2nd ts does NOT cause the 1st
+                            lag = 2,
+                            LayersUniv = 2,    # Layers in univariate and
+                            LayersBiv = 4) ->  #  bivariate models
+  nl_cause
+nl_cause$summary()                          #
+```
+
+# Transfer entropy
+```{r}
+ts_cont()
+
+```
+
+

@@ -1,0 +1,53 @@
+---
+title: "Delay State Spaces"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "here",
+                     "magrittr",
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 2 - Delay State Spaces.Rmd") # To help find files.
+
+install_github("barneyricca/ndstools")      # Specialized NLTS tools
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+Mostly focus on the classical delay state space approach:
+
+Embedding via constant delays (because some software still expects this). 
+
+# Linear Pendulum
+Use pendulum to show the importance of delay (and other) choices. Some things stay the same and some don't. How to choose? (Effectively, do a sensitivity analysis by varying parameters.)
+
+Dimension choice (via theory and via Takens), delay criteria from MI, FNN, Theiler windows, radius?
+
+Impact of added exogenous noise
+
+# Constant Delay State Space
+
+Lynx-hare
+
+Scarlet fever
+

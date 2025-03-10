@@ -1,0 +1,85 @@
+---
+title: "Singular Spectrum Analysis"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "here",
+                     "magrittr",
+                     "Rssa",                # SSA
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Singular Spectrum Analysis.Rmd") # To help find all the files.
+
+install_github("barneyricca/ntls_tools")    # Specialized NLTS tools
+library(ntls_tools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+```{r data}
+read.csv(here("Data/Lynx and Hare")) -> lh_df
+read.csv(here("Data/econ.csv")) -> econ_df
+read.csv(here("Data/walking sample.csv")) -> walk_df
+load(here("Data/NY Scarlet Fever.RData"))
+```
+
+Singular Spectrum Analysis
+
+References: [Package Rssa book](https://ssa-with-r-book.github.io/) or an [introductory SSA paper](https://arxiv.org/abs/1206.6910)
+
+From the Details of the package: "Typically the use of the package starts with the decomposition of the time series using ssa. After this a suitable grouping of the elementary time series is required. This can be done heuristically, for example, via looking at the plots of the decomposition (plot). Alternatively, one can examine the so-called w-correlation matrix (wcor). Automatic grouping can be performed by means of grouping.auto. In addition, Oblique SSA methods can be used to improve the series separability (iossa, fossa).
+
+Next step includes the reconstruction of the time-series using the selected grouping (reconstruct)."
+
+Let's do some
+
+```{r SSA}
+?ssa()
+```
+
+
+```{r SVD}
+# Embedding and decomposition
+ssa() ->
+  ssa1
+
+# Determine groups
+plot(ssa1) # Eigenvalues 
+plot(ssa1, type = "vectors")                # Eigenvectors 
+plot(ssa1, type = "paired")                 # Pairs of eigenvectors 
+plot(wcor(ssa1))                            # w-correlation matrix plot
+```
+
+
+```{r reconstructSVD}
+# Reconstruct
+reconstruct( 
+  ssa1,
+  groups = list(c(), c(), ...)) ->
+  recon1
+```
+
+Toeplitz
+```{r Toeplitz}
+
+```
+

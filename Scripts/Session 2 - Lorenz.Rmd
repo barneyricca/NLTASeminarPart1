@@ -1,0 +1,199 @@
+---
+title: "Lorenz"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "here",
+                     "magrittr",
+                     "nonlinearTseries",
+                     "scatterplot3d",       # Clunky 3-d scatter plots
+                     "tidyverse",
+                     "tseries",             # bds.test()
+                     "tseriesChaos")) {     # lorenz()
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 2 - Lorenz.Rmd")      # To help find all the files.
+
+install_github("barneyricca/ndstools")      # Specialized NLTS tools
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+# Lorenz Model
+
+## Data
+
+Note the paradigm here: clean signal plus noise, rather than noisy dynamics. This is just a demonstration, so we'll do this the easy way.
+```{r}
+lorenz() ->
+  lorenz_df
+
+set.seed(42)
+0.5 ->                                      # Noise level about 1% of the data
+  sigma                                     #  range.
+data.frame(time = lorenz_df$time,
+           x = lorenz_df$x + rnorm(length(lorenz_df$x), 0, sigma),
+           y = lorenz_df$y + rnorm(length(lorenz_df$y), 0, sigma),
+           z = lorenz_df$z + rnorm(length(lorenz_df$z), 0, sigma)) ->
+  noisy_lorenz_df
+
+2.5 ->                                      # Noise level about 5% of the data
+  sigma                                     #  range.
+data.frame(time = lorenz_df$time,
+           x = lorenz_df$x + rnorm(length(lorenz_df$x), 0, sigma),
+           y = lorenz_df$y + rnorm(length(lorenz_df$y), 0, sigma),
+           z = lorenz_df$z + rnorm(length(lorenz_df$z), 0, sigma)) ->
+  really_noisy_lorenz_df
+  
+
+# The next, and the corresponding dev.off() command, save the graph rather than
+#  displaying it here.
+# png(filename = here("Images/Lorenz.png"),
+#     width = 10,
+#     height = 5,
+#     units = "in",
+#     res = 600)
+lorenz_df %$%
+  scatterplot3d(x = x, y = y, z = z,
+                type = 'l')
+# dev.off()
+
+noisy_lorenz_df %$%
+  scatterplot3d(x = x, y = y, z = z,
+                type = 'l')
+
+really_noisy_lorenz_df %$%
+  scatterplot3d(x = x, y = y, z = z,
+                type = 'l')
+
+```
+
+## Create a Shadow State Space
+
+Pick a stream, any stream...I'll go with the x-coordintate.
+
+Choose a delay
+```{r}
+mi_ksg(lorenz_df$x)
+```
+
+Create the shadow state space. I'll use an embedding dimension of 3 and a delay of 14. (These are kina arbitrary.)
+```{r}
+embedd(lorenz_df$x,
+       d = 14,
+       m = 3) ->
+  lorenz_shadow
+```
+
+Plot the shadow state space
+```{r}
+scatterplot3d(lorenz_shadow)
+```
+
+## Investigate fixed points
+
+Fixed points and stability...trickier in 3-d...
+```{r}
+
+```
+
+## Tests
+
+Entropy test
+```{r}
+bds.test(x = lorenz_df$x,                   # data stream
+         m = 4,                             # Embed. dim. of 2, 3, and 4
+         eps = seq(0.1 * sd(lorenz_df$x),   # How close is close? Try various
+                   2 * sd(lorenz_df$x),     #  values.
+                   length.out = 6)) ->
+  bds                                       # H0: Series of random i.i.d.
+bds$p.value                                 # For various dimensions and
+                                            #  definitions of "close"
+
+bds.test(x = noisy_lorenz_df$x,             # data stream
+         m = 4,                             # Embed. dim. of 2, 3, and 4
+         eps = seq(0.1 * sd(noisy_lorenz_df$x), # How close is close? 
+                   2 * sd(noisy_lorenz_df$x),   #
+                   length.out = 6)) ->
+  bds                                       # H0: Series of random i.i.d.
+bds$p.value                                 # For various dimensions and
+                                            #  definitions of "close"
+
+bds.test(x = really_noisy_lorenz_df$x,      # data stream
+         m = 4,                             # Embed. dim. of 2, 3, and 4
+         eps = seq(0.1 * sd(really_noisy_lorenz_df$x), # How close is close? 
+                   2 * sd(really_noisy_lorenz_df$x),   #
+                   length.out = 6)) ->
+  bds                                       # H0: Series of random i.i.d.
+bds$p.value                                 # For various dimensions and
+                                            #  definitions of "close"
+
+```
+
+Nonlinearity test
+```{r}
+#| eval: FALSE
+
+# On my machine, the clean NSE takes more than 7 minutes, and the really noisy
+#  one takes 9 minutes, so you might not want to run them now. That's why the
+#  option #| eval: FALSE is at the beginning of this chunk.
+# Sys.time()
+# [1] "2025-02-12 11:49:50 MST"
+
+predict_local(lorenz_df$x)$nse              # Nash-Sutcliffe efficiency
+# [1] 1
+
+# Sys.time()
+# [1] "2025-02-12 11:57:02 MST"
+
+predict_local(noisy_lorenz_df$x)$nse
+# [1] 0.991
+
+predict_local(really_noisy_lorenz_df$x)$nse
+# [1] 0.844
+
+```
+Apparently, the level of noise in the system matters. We'll have to explore ways of getting rid of noise without losing the signal.
+
+Nonstationary test
+```{r}
+
+```
+
+## Is There a Signal?
+
+CCM
+```{r}
+
+```
+
+# Strange Attractors
+
+Notice that the Lorenz butterfly exhibits a type of stability that we haven't seen before. The two "eyes" of the butterfly wings each contain a fixed-point,
+and while the data never leave the vicinity of those fixed-points, they never
+really approach them either. But it isn't a cyclic fixed-point, it is something new. That new thing is a *strange attractor* and those are very interesting and ubiquitous features of nonlinear systems.
+
+# Additional Sources of Data
+
+The Malkus Waterwheel is a physical system that is also modeled by the Lorenz system. You can find some more information about the water wheel out on the web (e.g., on Wikipedia).
+
+You can also get lots of chaotic data by building circutis from Sprott's book,  *Elegant Circuits*.

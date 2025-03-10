@@ -1,0 +1,185 @@
+---
+title: "Changepoints"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "FNN",                 # Fast Nearest Neighbor searches
+                     "here",
+                     "magrittr",
+                     "nonlinearTseries",
+                     "tidyverse",
+                     "tseries")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 8 - Changepoints.Rmd")  # To help find all the files.
+
+install_github("barneyricca/ndstools")      # Specialized NLTS tools
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+
+# For testing:
+#source(here("Scripts/Nonlinear cross prediction.R"))
+```
+
+# Lynx and Hare Model
+
+We won't work through all the details here - that's what the rest of this seminar series is for - but here's the type of thing we will do. Let's ignore the fact that there are models for predator-prey populations, and work only with the data.
+
+This run-through will largely serve as a cautionary tale for following a procedure without careful examinations along the way.
+
+## Data
+```{r}
+read.csv(here("Data/Lynx and Hare.csv")) ->
+  lh_df
+```
+
+## Create a Shadow State Space
+
+Pick a stream, any stream.
+```{r}
+1 -> delay                                  # Arbitrary for now
+
+plot(lh_df$Hare[-c(1:delay)],               # Omit first delay values
+     lh_df$Hare[-c((nrow(lh_df)+1-delay):   # Omit last delay values
+                     nrow(lh_df))],
+     xlab = "h(t)",
+     ylab = paste0("h(t-",
+                   delay,
+                   ")"),
+     main = "LH Shadow State Space from Hare Population",
+     type = 'l')
+
+```
+
+Choose a delay
+```{r}
+# Do NOT use this next one. You might think it works, but without additional 
+#  code, it doesn't.
+# mutualInformation(time.series = lh_df$Hare) ->
+#   mi
+
+mi_ksg(lh_df$Hare) ->
+  mi
+
+plot(mi)
+```
+The first minimum occurs at a lag of 2, so let's use that.
+
+Create the shadow state space
+```{r}
+which.troughs(mi)[1] - 1 ->                 # This automates the visual
+  delay                                     #  we used. 0-indexed, so - 1
+
+```
+
+Choose an embedding dimension. Well, there are 2 species, so I'll guess 2 (although that might turn out to be incorrect.)
+
+Plot the shadow state space
+
+```{r}
+plot(lh_df$Hare[-c(1:delay)],               # Omit first delay values
+     lh_df$Hare[-c((nrow(lh_df)+1-delay):   # Omit last delay values
+                     nrow(lh_df))],
+     xlab = "h(t)",
+     ylab = paste0("h(t-",
+                   delay-1,
+                   ")"),
+     main = "LH Shadow State Space from Hare Population",
+     type = 'l')
+
+```
+
+## Tests
+
+Noise: Is the signal simply noise?
+```{r}
+bds.test(x = lh_df$Hare,                    # data stream
+         m = 4,                             # Embed. dim. of 2, 3, and 4
+         eps = seq(0.1 * sd(lh_df$Hare),    # How close is close? Try various
+                   2 * sd(lh_df$Hare),      #  values.
+                   length.out = 6)) ->
+  bds                                       # H0: Series of random i.i.d.
+bds$p.value                                 # For various dimensions and
+                                            #  definitions of "close"
+```
+If $p < 0.05$ there's a signal. (The time graph indicates that the signal probably isn't linear.)
+
+
+Nonlinearity: Is there a nonlinear signal?
+```{r}
+predict_local(lh_df$Hare)$nse               # Nash-Sutcleffe coefficient of
+                                            #  efficiency
+
+```
+Typically, nse > 0.65 is proposed as the threshold for a nonlinear model to exist. nse > 0 means the nonlinear model is a better predictor than the mean of the data; nse < 0 inidcates that the mean is a better predictor than the model. Of course, these are dependent on embedding dimensions, delays, and so on, so this will not always produce what is desired.
+
+Nonstationary test: Is the signal nonstationary?
+```{r}
+nl_cross_pred(lh_df$Hare,
+              nseg = 3,                     # Default is 5
+              m.max = 6)                    # Default is 6
+
+```
+
+There are other tests as well, and obviously there is need to play around with parameters. In the end, however, the lynx and hare population data are very short (< 100 data points) for NLTS analyses, so one has to be very, very careful. ("Short" is typically < 1000 data points.)
+
+## Is There a Signal?
+
+Surrogate data testing
+```{r}
+
+```
+
+CCM
+```{r}
+
+```
+
+## Phenomenological Modeling
+
+Data Pre-processing
+```{r}
+
+```
+
+
+SINDy
+
+First, SINDy on 1 data stream.
+```{r}
+
+```
+
+Second, SINDy on the 2 data streams together.
+```{r}
+
+```
+
+## Investigate fixed points
+
+Fixed points and stability
+```{r}
+
+```
+
+
+Does the result look anything like any of the accepted models?

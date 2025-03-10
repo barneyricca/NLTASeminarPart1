@@ -1,0 +1,37 @@
+---
+title: "Inference with Surrogate Data"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "here",
+                     "magrittr",
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 7 - Surrogate Data.Rmd") # To help find all the files.
+
+install_github("barneyricca/ndstools")      # Specialized NLTS tools
+library(ndstools)
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+Surrogate Data
+
+Include the distinguishing statistics: NSE, MLCE, and correlation dimension (in opposite order).

@@ -1,0 +1,277 @@
+---
+title: "Problem Demonstrations"
+output: word_document
+date: "2025-01-16"
+---
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # 
+                     "here",
+                     "magrittr",
+                     "nonlinearTseries",    # Lorenz attractor
+                     "phaseR",
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 1 - Problem Demonstrations.Rmd")   # To help find all the files.
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+install_github("barneyricca/ndstools")
+library(ndstools)
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+# Short data problems
+Short data. Although long-ish data streams may exist in some fields (e.g., finance), short data streams are the norm in many other fields. For example, I am currently part of a grant project that will gather 60 time points of data on each participant. This is double the number of time points that I had for other recently published projects, and 30-60 time points is not an uncommon range. Sadly, many of the methods we will use have little power at such lengths.
+
+Khan et al., (2007) used 1000 for the cutoff for the length of "short" data series and 50-100 as the cutoff for the length of "very short" data series.
+
+```{r prepLorenz}
+lorenz(time = seq(0, 60, by = 0.01)) ->
+  lorenz_ls
+
+# The first 50 or so points are "transients," so remove them
+data.frame(time = lorenz_ls$time[-c(1:100)],
+           x = lorenz_ls$x[-c(1:100)],
+           y = lorenz_ls$y[-c(1:100)],
+           z = lorenz_ls$z[-c(1:100)]) ->
+  lorenz_df
+
+lorenz_df[1:5000,] -> lorenz_long
+lorenz_df[1:500,] -> lorenz_short
+lorenz_df[1:50,] -> lorenz_very_short
+
+```
+
+Let's use a technique from the Introduction to NDS seminar to find the fixed points
+
+```{r lorenzFixedPoints}
+fixed_1d(Level_data =                       # Doesn't work with NA
+           lorenz_long$x[-nrow(lorenz_long)],
+         Velocity_data = diff(lorenz_long$x)) ->
+  long_fixed
+{
+  lorenz_long %$% plot(time, x, 
+                       type = 'l',
+                       main = "Long Lorenz")
+  abline(h = long_fixed$Level,
+         col = ifelse(long_fixed$Stability == "Stable",
+                      "blue",
+                      "orange"))
+}
+
+fixed_1d(Level_data =                       # Doesn't work with NA
+           lorenz_short$x[-nrow(lorenz_short)],
+         Velocity_data = diff(lorenz_short$x)) ->
+  short_fixed
+{
+  lorenz_short %$% plot(time, x, 
+                        type = 'l',
+                        main = "Short Lorenz")
+  abline(h = short_fixed$Level,
+         col = ifelse(short_fixed$Stability == "Stable",
+                      "blue",
+                      "orange"))
+}
+
+fixed_1d(Level_data =                       # Doesn't work with NA
+           lorenz_very_short$x[-nrow(lorenz_very_short)],
+         Velocity_data = diff(lorenz_very_short$x)) ->
+  very_short_fixed
+{
+  lorenz_very_short %$% plot(time, x, 
+                             type = 'l',
+                             main = "Very Short Lorenz")
+  abline(h = very_short_fixed$Level,
+         col = ifelse(very_short_fixed$Stability == "Stable",
+                      "blue",
+                      "orange"))
+}
+
+# long_fixed
+# short_fixed
+# very_short_fixed
+
+```
+
+
+
+# Noisy data problems
+Noisy data can also be problematic. Given that nonlinear models cannot rely on noise being relatively small in relationship to the signal, any level of noise can be difficult to work with. This is exacerbated because most of the fields outside of the physical sciences and engineerings have relatively small signal-to-noise ratios.
+
+Let's look at some examples of what can happen. First, a one-dimensional example.
+
+```{r example1}
+example1 <- function (t,                    # This is phaseR::example1
+                      y, 
+                      parameters) {
+  list(4 - y^2)
+}
+
+findEquilibrium(deriv = example1,
+                y0 = 1,
+                system = "one.dim") ->
+  efp1
+
+flowField(deriv = example1,
+          xlim = c(-1,1),
+          ylim = c(0,5),
+          system = "one.dim",
+          add = FALSE)
+```
+
+Now, let's add some noise to the derivative
+```{r example1_noisy}
+example1_noisy <- function (t, y, parameters) {
+  list(4 - y^2 + rnorm(1, 0, sd = parameters[1]))
+}
+
+1e-6 -> noise_level                         # Noise level
+
+set.seed(42)
+findEquilibrium(deriv = example1_noisy,
+                y0 = 1,
+                parameters = noise_level,
+                system = "one.dim") ->
+  efp1_noise
+
+set.seed(42)
+flowField(deriv = example1_noisy,
+          xlim = c(-1,1),
+          ylim = c(0,5),
+          parameters = noise_level,
+          system = "one.dim",
+          add = FALSE)
+
+```
+
+Now, a 2-dimensional example:
+```{r}
+example15 <- function (t,                    # This is phaseR::example15
+                      y, 
+                      parameters) {
+    list(c(y[1]^2 - 3 * y[1] * y[2] + 2 * y[1], y[1] + y[2] - 
+        1))
+}
+findEquilibrium(deriv = example15,
+                y0 = c(1,1),
+                system = "two.dim") ->
+  efp15
+
+flowField(deriv = example15,
+          xlim = c(-5,5),
+          ylim = c(-5,5),
+          system = "two.dim",
+          add = FALSE)
+
+```
+
+```{r}
+example15_noisy <- function (t,             # This is phaseR::example15
+                             y, 
+                             parameters) {
+  list(c(y[1]^2 - 3 * y[1] * y[2] + 2 * y[1] + rnorm(1, 0, parameters[1]),
+         y[1] + y[2] - 
+        1 + rnorm(1, 0, parameters[1])))
+}
+
+1e-6 -> noise_level
+
+set.seed(42)
+findEquilibrium(deriv = example15_noisy,
+                y0 = c(1,1),
+                parameters = noise_level,
+                system = "two.dim") ->
+  efp15_noise
+
+set.seed(42)
+flowField(deriv = example15_noisy,
+          xlim = c(-5,5),
+          ylim = c(-5,5),
+          parameters = noise_level,
+          system = "two.dim",
+          add = FALSE)
+
+```
+
+# Nonstationarity problems
+Nonlinear dynamical systems can exhibit multiple qualitatively different behaviors. Hence, we need to be able to identify the beginning and ending of these behaviors so that our models can encompass only one behavior at a time. However, as we’ve seen, it is also possible that data which appear to be nonstationary are generated from the same dynamics that produce apparently stationary behavior.
+
+## Phase transition
+
+Suppose there is a sudden change in data. This occurs, for example, if a data lead on a muscle becomes detached temporarily, or there's a static build up, or a slow increase in temperature melts the solid, or whatever.
+
+```{r}
+100 -> tmax
+0.01 -> beta
+5.9 -> omega
+
+1:tmax -> t
+exp(-beta*t) * cos(omega*t) -> p1
+0.5 + exp(-beta*t) * cos(omega*t) -> p2
+-exp(-beta*t) * cos(omega*t) -> p3
+
+c(p1, p2, p3) -> response
+1:(3*tmax) -> t
+
+plot(t, response, type = 'l')               # time-series plot
+plot(response[-1], 
+     response[-length(response)],
+     type = 'l')
+
+```
+
+## Slow change
+
+Sometimes, there is a slow change in the data's amplitude. (Slide 13 in the slide deck.)
+```{r}
+2000 -> N
+5.3 -> num_cyc
+
+2 * pi / N -> omega1
+omega1 * num_cyc -> omega2
+
+1:N -> t
+1 -> amp
+
+amp * (1.5 + 
+         cos(omega1 * t)) *
+         sin(omega2 * t) ->
+  x
+
+amp *                                       # dx is the derivative
+  (1.5 + 
+     cos(omega1 * t) * omega2 * cos(omega2 * 5)) -
+  (sin(omega2 * t) * omega1 * sin(omega1 * t)) -> 
+  dx
+
+plot(t, x, type = 'l')                      # Plot
+
+plot(x, dx,                                 # State space plot
+     type = 'l',
+     xaxt="n",
+     yaxt="n")
+
+```
+
+
+# Other problems
+Lastly, and this is a problem which we will grapple with more in the Part II of this series, interpreting NLTS models can be very tricky. And interpretability is important; if we cannot interpret our models, then we greatly impede the dance between theoretical and empirical studies.
+
+Linear models are "simple" to interpret. Each regression coefficient, for example, tells us how strong the relationship is between the DV and IV.
+
+However, any sort of interaction makes the regression no longer linear, and how do we interpret those interactions?

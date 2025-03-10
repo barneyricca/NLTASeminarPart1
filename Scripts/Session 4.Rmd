@@ -1,0 +1,159 @@
+---
+title: "Session 4"
+output: word_document
+date: "2025-01-16"
+---
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # 
+                     "here",
+                     "magick",
+                     "magrittr",
+                     "phaseR",
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 4.Rmd")   # To help find all the files.
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+install_github("barneyricca/ndstools")
+library(ndstools)
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+Store the Beatle's RQA results somewhere, so we don't have to violate copyright.
+
+Read them in and compare the metrics.
+
+# Theiler Window
+
+Need something that will show TW. I'd use a highly oversampled sine wave.
+
+
+# Distance Plot
+```{r}
+1:200 -> t
+49.5 * sin(t/6) * sin(t/80) + 1 -> x
+
+png(filename = here("Images/Distance plot data.png"),
+    width = 10,
+    height = 5,
+    units = "in",
+    res = 600)
+plot(t, x, type = 'l', lwd = 2)
+dev.off()
+
+outer(X = x,
+      Y = x,
+      FUN = "-") ->
+  x_dist
+# abs(x_dist) + 1 ->
+#   x_dist
+
+# range(x_dist)                               # Should be ~[1,100]
+# floor(x_dist) -> 
+#   color
+
+
+  colorRampPalette(c("blue",                # Create a color palette from
+                     "gold"),               #  blue to gold
+                   alpha = TRUE) ->         # 
+    this_palette
+  this_palette(100) ->                      # Create discrete color values 
+    topo_colors
+
+# matrix(data = topo_colors[color],
+#        nrow = 200,
+#        ncol = 200) ->
+#   top_graph
+
+png(filename = here("Images/Distance plot.png"),
+    width = 10,
+    height = 5,
+    units = "in",
+    res = 600) 
+image(x = t,
+      y = t,
+      z = x_dist,
+      zlim = range(x_dist),
+      col = topo_colors,
+      xaxt = 'n',
+      yaxt = 'n',
+      xlab = "",
+      ylab = "")
+dev.off()
+```
+
+
+```{r}
+library(crqa)
+
+mi_ksg(x) ->
+  ami_x
+
+
+
+crqa(ts1 = x, 
+     ts2 = x,
+     delay = 10,                            # From an AMI plot
+     embed = 3,                             #
+     radius = 20,
+     rescale = 0,
+     normalize = 0,
+     mindiagline = 2,
+     minvertline = 3,
+     tw = 0,
+     whiteline = FALSE,
+     recpt = FALSE,
+     side = 'both',
+     method = 'rqa',
+     metric = 'euclidean',
+     datatype = "continuous") ->
+  test_rqa
+
+png(filename = here("Images/Distance plot RP.png"),
+    width = 10,
+    height = 5,
+    units = "in",
+    res = 600) 
+
+plot_rp(test_rqa$RP)
+dev.off()
+
+```
+
+
+# Animated TDA
+
+```{r createAB_Animation}
+paste0(here(),
+       "/Images/AB/AB-", 0:70, ".png") ->
+  filenames
+image_read(filenames[1]) ->
+  m
+
+for (i in 2:71) 
+  c(m, image_read(filenames[i])) ->
+  m
+image_animate(m, 
+              fps = 2, 
+              loop = 1, 
+              dispose = "previous") ->
+  m
+image_write(m, here("Images/AB animation.gif"))
+```
+

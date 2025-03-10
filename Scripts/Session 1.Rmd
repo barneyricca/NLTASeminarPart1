@@ -1,0 +1,293 @@
+---
+title: "Session 2"
+output: word_document
+date: "2025-01-16"
+---
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("deSolve",
+                     "devtools",            # R packages needed here
+                     "here",
+                     "magrittr",
+                     "phaseR",
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 1.Rmd")               # To help find all the files.
+
+#install_github("barneyricca/ntls_tools")    # Specialized NLTS tools
+#library(ntls_tools)
+
+install_github("barneyricca/ndstools")
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+# Slide 12
+
+```{r}
+4 -> R
+2000 -> l
+rep(0.7, l) ->
+  x
+for(index in 2:l) {
+  R * x[index-1] * (1 - x[index-1]) ->
+    x[index]
+}
+
+set.seed(42)
+runif(35) ->
+  y
+
+plot(x[366:400], type = 'l')
+plot(y, type = 'l')
+
+x[1226:1260] ->
+  x
+
+save(y, file = here("Data/r1.RData"))
+save(x, file = here("Data/r2.RData"))
+```
+
+
+# Slide 13
+
+```{r HBR6_1}
+#| eval: FALSE
+
+# Code 6.1 from HBR
+#Set parameters for integration  
+t.end<-10   #integrate from t=0 to t=10  
+delta<-0.01   #default value in phaseR is t.step = 0.01  
+
+#Define linear Model  
+ode_linear<-function(t,y,parameters){  
+  x<-y[1]  
+  y<-y[2]  
+  a<-parameters[1]  
+  b<-parameters[2]  
+  c<-parameters[3]  
+  d<-parameters[4]  
+  dy<-numeric(2)  
+  dy[1]<-a*x+b*y  
+  dy[2]<-c*x+d*y  
+  list(dy)  
+  } 
+
+
+# Equilibrium type
+#Stable node attractor  
+parms.sn<-c(-3,2,2,-3)      #parameter values  
+x0.sn<-c(-0.5,0,0.5,-1,1,-0.5,0,0.5)  
+y0.sn<-c(1,1,1,0,0,-1,-1,-1)  
+xy0.sn<-cbind(x0.sn,y0.sn)   #initial conditions  
+
+#Unstable node  
+parms.un<-c(3,2,2,3)  
+x0.un<-c(0.4,0.6,-0.4,-0.6,-0.1,0.1)  
+y0.un<-c(-0.5,-0.5,0.5,0.5,0,0)  
+xy0.un<-cbind(x0.un,y0.un)  
+
+#Stable focus attractor  
+parms.sf<-c(-1,3,-3,-1)  
+x0.sf<-c(0.5,-0.5)  
+y0.sf<-c(-1,1)  
+xy0.sf<-cbind(x0.sf,y0.sf)  
+
+#Unstable focus  
+parms.uf<-c(1,3,-3,1)  
+x0.uf<-c(0,0)  
+y0.uf<-c(-0.01,0.01)  
+xy0.uf<-cbind(x0.uf,y0.uf)  
+
+#Saddle point  
+parms.sp<-c(1,3,3,1)  
+x0.sp<-c(-0.9,-0.8,-0.7,0.7,0.8,0.9,-0.1,0.1)  
+y0.sp<-c(0.8,0.8,0.8,-0.8,-0.8,-0.8,-0.1,0.1)  
+xy0.sp<-cbind(x0.sp,y0.sp)  
+
+#centre  
+parms.cn<-c(0,3,-3,0)  
+x0.cn<-c(0)  
+y0.cn<-c(1)  
+xy0.cn<-cbind(x0.cn,y0.cn)  
+
+#Select equilibrium type for which to draw phase space diagram  
+parms=parms.cn  
+xy0<-xy0.cn #initial conditions  
+
+#Compute time series solutions x (x.soln) and y (y.soln) from selected  #initial values and plot  
+y0<-c(0,1) #initial values 
+ts<-numericalSolution(ode_linear,
+                      y0=y0,
+                      tlim = c(0, t.end),
+                      t.step=delta,
+                      type="one",
+                      ylim=c(-1.5,1.5),
+                      parameters=parms,
+                      colour=c("black","black"),
+                      ylab="x,y",
+                      lwd=3,  
+                      cex.axis=1.1,
+                      font.axis=2)  
+x.soln<-ts$x #time series solution of x  
+y.soln<-ts$y #time series solution of y  
+
+#Phase Diagram: Vector-field arrows, nullclines, trajectories 
+arrows<-flowField(ode_linear,
+                  x.lim=c(-1,1),
+                  y.lim=c(-1,1),
+                  lwd=2,  
+                  parameters=parms,
+                  points=19,
+                  add=FALSE,
+                  cex.axis=1.1,
+                  font.axis=2)  
+null<-nullclines(ode_linear,
+                 x.lim=c(-1,1),
+                 y.lim=c(-1,1),
+                 parameters=parms,
+                 col="black",
+                 lwd=3,
+                 points=500)  flow<-trajectory(ode_linear,y0=xy0,t.end=t.end,t.step=delta,parameters=parms,  colour=rep("black",3),lwd=3,lty=1)  #Add eigenvectors to phase diagram  parms1<-matrix(parms,ncol=2,nrow=2,byrow=TRUE) #coefficient matrix  eigens<-eigen(parms1) #compute eigensystem  values<-eigens$values #eigenvalues 
+
+
+# Plot eigenvectors only for real eigenvalues
+if(is.numeric(values[1])){  
+  x.ev<-seq(-1,1,0.1)  
+  y_ev1<--((parms1[1,1]-values[1])/parms1[1,2])*x.ev #eigenvector equation  
+  y_ev2<--((parms1[1,1]-values[2])/parms1[1,2])*x.ev #eigenvector equation  
+  par(new=TRUE) #add eigenvectors to phase plot  
+  plot(x.ev,y_ev1,
+       ylab="",
+       xlab="",
+       axes=FALSE,
+       col="black",
+       type='l',
+       lty="dashed",
+       lwd=2)  
+  lines(x.ev,y_ev2,
+        ylab="",
+        xlab="",
+        col="black",
+        type='l',
+        lty="dashed",
+        lwd=2)  
+  par(new=FALSE)} #end if statement  
+
+#Stability Check for x*=y*=0 
+stability<-stability(ode_linear,
+                     y.star=c(0,0),
+                     parameters=parms)  
+eigenvalues<-values  #Export time series solutions to *.csv output file 
+ts.solns<-cbind(x.soln,y.soln)  dir.results<-as.character("C:/Users/Ray/Documents/R_files/Results")  setwd(dir.results)  
+write.table(ts.solns,
+            sep=",",
+            col.names=c("x.soln","y.soln"),
+            "ts.solns.csv",  
+            row.names=FALSE) 
+
+
+```
+```{r}
+
+# Following Code 6.12 in HBR
+#Set Parameters  
+delta<-0.1 #integration time step  
+
+state<-c(x=0,y=1) #initial conditions for variables  
+parameters<-c(a=0,b=3,c=-3,d=0) #parameters giving centre point  
+#Define ODE system  
+model<-function(t,state,parameters){  
+  with(as.list(c(state,parameters)), {
+
+    dx <-(-1.2+0.2*t)*x + (2.3 + 0.1 * t) *y #make parameter 'a' time-dependent  
+    dy <- c*x+d*y  
+    list(c(dx,dy))  }) #end with (as.list...  
+} 
+  #end model function  
+  
+  #Integrate ODE system  
+times<-seq(0,12,by=delta) #integration step 
+out<-ode(y=state,
+         times=times,
+         func=model,
+         parms=parameters,
+         method="rk4")  
+#head(out)  
+  #Plots of simulated values  
+#par(mfrow=c(3,1))  
+plot(out[,"x"],
+     type='l',
+     lwd=3,
+     cex.axis=1.1,
+     font.axis=2)  
+
+# plot(out[,"y"],type='l',lwd=3,cex.axis=1.1,font.axis=2) 
+plot(out[,"x"],out[,"y"],type='l',lwd=3,cex.axis=1.1,font.axis=2) 
+
+```
+
+```{r}
+2000 -> N
+5.3 -> num_cyc
+
+2 * pi / N -> omega1
+omega1 * num_cyc -> omega2
+
+1:N -> t
+1 -> amp
+
+amp * (1.5 + 
+         cos(omega1 * t)) *
+         sin(omega2 * t) ->
+  x
+
+amp * 
+  (1.5 + 
+     cos(omega1 * t) * omega2 * cos(omega2 * 5)) -
+  (sin(omega2 * t) * omega1 * sin(omega1 * t)) -> 
+  dx
+
+png(filename = here("Images/Slide 13a.png"),
+    width = 5,
+    height = 5,
+    units = "in",
+    res = 600)
+plot(t, x, type = 'l')
+dev.off()
+
+png(filename = here("Images/Slide 13b.png"),
+    width = 5,
+    height = 5,
+    units = "in",
+    res = 600)
+plot(x, dx, 
+     type = 'l',
+     xaxt="n",
+     yaxt="n")
+dev.off()
+
+
+```
+
+
+
+# Slide 14
+
+

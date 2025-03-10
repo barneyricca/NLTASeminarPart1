@@ -1,0 +1,70 @@
+---
+title: "Bifurcations"
+output: word_document
+date: "2025-01-16"
+---
+
+Do logistic map and its bifurcations
+Do HKB and its bifurcations
+
+Look at critical slowing down near the bifurcation point
+
+Can we do something in HKB to simulate behavior from the landscape?
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "here",
+                     "magrittr",
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 2 - Bifurcations.Rmd")  # To help find all the files.
+
+install_github("barneyricca/ndstools")      # Specialized NLTS tools
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+# HKB Model
+
+Landscape and frequency changes
+
+The HKB model has a landscape like this:
+$U(\phi) = -a cos(\phi) - b cos(2 \phi)$
+
+where $\phi$ is the relative phase between the fingers (so that $\phi = 0$ is in phase and $\phi = -\pi$ is anti-phase). (We don't care about *a* and *b*; their ratio is proportional to the frequency of flexing.)
+
+```{r HKB}
+
+# Go from b/a = 2 to b/a = 0 to see the bifurcation
+1 -> a
+.25 -> b
+
+curve(expr = -a * cos(x) - b * cos(2*x),
+      from = -4.5,
+      to = 1.5,
+      n = 201,
+      xlab = "Phase Difference",
+      ylab = "U")
+
+```
+
+For more details, see: Kelso, J. A. S. (1999). *Dynamic patterns: The self-organization of brain and behavior* (3rd printing). Cambridge, MA: MIT Press.
+
+These are a different type of bifurcation than what was found in the logistic map.
+

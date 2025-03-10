@@ -1,0 +1,238 @@
+---
+title: "NTLS Examples"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "FixedPoint",
+                     "forecast",            # demonstrate auto.arima() use
+                     "here",
+                     "magrittr",
+                     "phaseR",
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 1 - NTLS Examples.Rmd") # To help find all the files.
+
+install_github("barneyricca/ndstools")    # Specialized NLTS tools
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+# Example 1: Random or Not?
+
+Here are two data streams; one noisy but linear and the other nonlinear but with no noise.
+```{r data}
+load(here("Data/r1.RData"))                 # y
+load(here("Data/r2.RData"))                 # x
+
+plot(x, type = 'l', ylim = c(0,1))
+plot(y, type = 'l', ylim = c(0,1))
+```
+
+
+A common sort-of-dynamic approach to modeling time series $a_1, a_2, a_3, ...$ is to use *autoregression*:
+
+$a_t = r_1 * a_{t-n_1} + r_2 * a_{t-n_2} + ...$
+
+where the *n* can be any positive integers, and the *r* are constants estimated by the fitting process. The typical approach is to start by using the *autocorrelation function* to determine the needed *n* and then estimating the corresponding *r*. Let's do that with the two data streams. (This is NOT a seminar involving autoregression; I'm just demonstrating that the common way has issues.)
+
+
+```{r autocorrelations}
+acf(y)
+acf(x)
+```
+Well, neither of those look promising (all are values except for the mean value are inside the dotted lines), but let's try anyway. We might get something with the first couple.
+
+```{r arima}
+auto.arima(y) -> y_ar
+auto.arima(x) -> x_ar
+
+summary(y_ar)
+summary(x_ar)
+
+```
+Well, one seems to use 2 components, while the other uses only 1. However, the average squared errors (sigma^2) indicate that the errors are relatively big (sqrt(0.0764) = 0.277; sqrt(0.104) = 0.322). For numbers between 0 and 1, the average number in the sequence is about 0.6, and given that the error is roughly 0.3, this indicates a 50% error. Ugh.
+
+Not very informative (or very good) in either case.
+
+Now, let's create a *shadow state space* or *delay state space* using a delay of 1:
+```{r shadowStateSpace}
+plot(x[-length(x)], x[-1],
+     pch = 16,
+     cex = 0.7)
+plot(y[-length(x)], x[-1],
+     pch = 16,
+     cex = 0.7)
+
+```
+
+Those look more informative. One (the random sequence) still looks random, but the other (a logistic) looks like a parabola (which it is).
+
+Back to PPT
+
+# Example 2: Lynx and Hares
+
+```{r popData}
+read.csv(here("Data/Lynx and Hare.csv")) ->
+  lh_df
+```
+
+```{r timePlots}
+lh_df %$%
+  plot(Year, Hare,
+       type = 'l',
+       ylab = "Hare Pop.")
+
+lh_df %$%
+  plot(Year, Lynx,
+       type = 'l',
+       ylab = "Lynx Pop.")
+
+```
+
+```{r comboPlot}
+lh_df %$%
+  plot(Year, Hare,
+       type = 'l',
+       ylab = "Population (1000s)")
+
+lh_df %$%
+  lines(Year, Lynx,
+        col = "blue")
+
+legend(1900, 150,
+       legend = c("Hare pop.", "Lynx pop."),
+       col = c("black", "blue"),
+       lty = 1)
+```
+
+
+It makes sense to use the hare and lynx populations as the components of the ecosystem state. Hence, the state space plot looks like this:
+
+```{r stateSpacePlot}
+lh_df %$%
+  plot(Hare, Lynx,
+       type = 'l')
+```
+A bit of a mess. Still, we can find things out, like perhaps any fixed points.
+I'll guess that the fixed point is somewhere in the middle of all that stuff, like at 40k hare and 30k lynx. Let's check on that, using our approach from the Intro to NDS workshop. (We aren't going to do this again, so don't worry if you don't fully remember it; we just need something to work with.)
+
+Fixed points and stability
+```{r fixedPoint}
+# FixedPoint() needs a function that is derived from the finite difference
+#  approach:
+#  velocity = level(next_time) - v(this_time) = f(level, parameters)
+#   where f(level, parameters) is the same as in the ode()-required function.
+# From the previous equation, we use a bit of algebra to get:
+#  level(next_time) = f(level, parameters) + v(this time)
+# 
+lh_fp <- function(y) {
+  y[1] -> Hare                              # Current estimate
+  y[2] -> Lynx                              #
+  m_parm[1] -> b_H
+  m_parm[2] -> d_H
+  m_parm[3] -> d_L
+  m_parm[4] -> b_L
+  
+  # Use finite differences (solve dx = x(t+1)-x(t) = some function) to get the 
+  #  following:
+  b_H * Hare - d_H * Hare * Lynx + Hare ->  # "+ Hare" from finite differences
+    Hare_new
+  - d_L * Lynx + b_L * Hare * Lynx + Lynx -># "+ Lynx" from finite differences
+    Lynx_new
+  return(c(Hare_new, Lynx_new))             # Not a list!
+}
+
+c(b_H = 0.5,                                # These were reported by Mahaffy
+  d_H = 0.02,                               #  and make good starters.
+  d_L= 0.9, 
+  b_L= 0.03) ->
+  m_parm
+
+FixedPoint(Function = lh_fp,
+           Inputs = c(40, 30),              # Approximated from the graph
+           Method = "Anderson",             # "Simple" and "Aitken" fail
+           Dampening = 1.00) ->             # Try different values
+  lh_fixed_points
+  
+lh_fixed_points$FixedPoint             #
+
+```
+
+```{r stability}
+
+# This is also sloppy programming, but it works.
+lh <- function(t,
+               y,
+               parameters) {
+
+  parameters[1] -> b_H
+  parameters[2] -> d_H
+  parameters[3] -> d_L
+  parameters[4] -> b_L
+  y[1] -> Hare                              # This is a bit awkward, but it is
+  y[2] -> Lynx                              #  safer and works better here
+
+  b_H * Hare - d_H * Hare * Lynx ->         # dHare is the Hare velocity
+    dHare
+  - d_L * Lynx + b_L * Hare * Lynx ->       # dLynx is the Lynx velocity
+    dLynx
+  return(list(c(dHare, dLynx)))
+}
+
+(stability(lh, 
+          ystar = lh_fixed_points$FixedPoint, 
+          parameters = m_parm,
+          summary = FALSE))$ystar
+
+(stability(lh, 
+          ystar = lh_fixed_points$FixedPoint, 
+          parameters = m_parm,
+          summary = FALSE))$classification
+
+```
+
+We can recover a lot of the state space from either the hare or the lynx data stream. Specifically, we get that there is a fixed point, and it is oscillatory and stable. We get some decent bounds on its location, too.
+
+```{r lhDelayStateSpace}
+#| include: TRUE
+plot(lh_df$Lynx[-1],
+     lh_df$Lynx[-nrow(lh_df)],
+     type = 'l',
+     xlab = "Lynx(t)",
+     ylab = "Lynx(t-1)")
+points(25,25,                               # From stability() above        
+       pch = 16,
+       col = "blue")
+
+plot(lh_df$Hare[-1],
+     lh_df$Hare[-nrow(lh_df)],
+     type = 'l',
+     xlab = "Hare(t)",
+     ylab = "Hare(t-1)")
+points(30,30,                               # From stability() above        
+       pch = 16,
+       col = "forestgreen")
+
+```
+
+From the acf(), we might consider lags not of 1, but of 2 or 3 (as those are the first minima in the absolute value of the ACF).

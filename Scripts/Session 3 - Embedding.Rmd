@@ -1,0 +1,138 @@
+---
+title: "Embedding"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "here",
+                     "magrittr",
+                     "nonlinearTseries",    # Lorenz system
+                     "scatterplot3d",
+                     "tidyverse",
+                     "tseriesChaos")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Embedding.Rmd")           # To help find all the files.
+
+install_github("barneyricca/ndstools")    # Specialized NLTS tools
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+# Data
+```{r loadData}
+read.csv(here("Data/Lynx and Hare.csv")) -> # Lynx and Hare populations
+  lh_df
+read.csv(here("Data/Mayport.csv")) ->       # Sea level at Mayport station
+  mp_df                                     #  Has missing data (Level = -99999)
+load(here("Data/NY Scarlet Fever.RData"))   # Scarlet fever in NY; messy data
+```
+```{r lorenzData}
+suppressWarnings(                           # Deprecated behavior warning
+  lorenz(sigma = 10,                        # Traditional parameters are 10,
+         beta = 8/3,                        #  8/3, and 28
+         rho = 28,
+         start = c(-13, -14, 47),           # Will converge to butterfly
+         time = seq(0, 50, by = 0.01))) ->  # 5001 data points
+  lorenz_df
+```
+
+
+# Constant Delay Embedding
+- Choose delay (AMI)
+- Choose Theiler window (ACF)
+- Choose embedding dimension (FNN)
+
+```{r autoEmbed}
+
+```
+```{r embedByHand}
+
+```
+
+# Principal Component Analysis Embedding
+- Lots of components
+- Which contribute a lot?
+```{r PCAExample}
+# If everyone is familiar with PCA, we'll skip this. Otherwise, we'll do it.
+
+```
+```{r PCAEmbedding}
+# Start by embedding the Lorenz data in a much higher dimension than you
+#  think you need. Takens can help here, but that comes later
+11 ->                                       # embedding dimension
+  m
+1 ->                                        # time delay; choose a small value
+  d
+embedd(lorenz_df$x,                         # Need the TseriesChaos version
+      m,                                    #  to override the default auto-
+      d) ->                                 #  behavior.
+  emb
+
+pc<- prcomp(emb,                            # Principal Components Analysis
+            center = TRUE,                  # Center and scale the variables.
+            scale. = TRUE)                  #
+summary(pc)  
+
+plot(100 * pc$sdev / sum(pc$sdev ^ 2),      # Scree plot
+     type="b",
+     pch = 19,
+     cex = 1.2,
+     xlab="Principal Component", 
+     ylab="Percent Variance",
+     ylim=c(0,40),  
+     xlim=c(1,m),
+     cex.lab=1.5,
+     cex.axis=1.2)  
+
+```
+```{r plotPCAReconstruction}
+scatterplot3d(predict(pc)[,1:3],
+              type="l",
+              cex.lab=1.5,
+              cex.axis=1.2,
+              lab=c(4,4,7),
+              lab.z=4)
+```
+
+# Maximally Orthogonal Embedding
+- Construct delay for each additional dimension
+- Stop when no additional information
+- Does better compared to the "flat" dimensions that can show up in the constant delay embedding.
+```{r maxOrthoEmbed}
+max_ortho_embed(lorenz_df$x) ->
+  emb_mo
+
+emb_mo$dims
+emb_mo$delays
+
+scatterplot3d(emb_mo$ss[,1:3],
+              type="l",
+              cex.lab=1.5,
+              cex.axis=1.2,
+              lab=c(4,4,7),
+              lab.z=4)
+
+```
+
+# Multi-Dimension Embedding
+
+

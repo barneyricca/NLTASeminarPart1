@@ -1,0 +1,71 @@
+---
+title: "Session 6"
+output: word_document
+date: "2025-01-16"
+---
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # 
+                     "here",
+                     "magrittr",
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 6.Rmd")   # To help find all the files.
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+install_github("barneyricca/ndstools")
+library(ndstools)
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+```{r}
+1:512 -> t
+128 -> tau
+2 * pi / tau -> fr
+
+2 * sin(fr*t) + 3 * sin(2 * fr *t) ->
+  x
+
+png(filename = here("Images/Session 6Time plot.png"),
+    width = 5,
+    height = 5,
+    units = "in",
+    res = 600)
+plot(t,x,type = 'l')
+dev.off()
+```
+```{r}
+fft(x) ->
+  z
+png(filename = here("Images/Session 6 Frequency plot.png"),
+    width = 5,
+    height = 5,
+    units = "in",
+    res = 600)
+plot(0:511,                                # dc component!
+     abs(z), type = 'l',
+     xlim = c(0, 20),                      # Don't forget about Nyquist.
+     ylab = "Amplitude",
+     xlab = "pseudo-frequency",
+     lwd = 3)
+abline(v = c(4, 8),                        # 512 / tau and 2 * 512/tau
+       col = "blue",
+       lwd = 3)
+dev.off()
+```
+

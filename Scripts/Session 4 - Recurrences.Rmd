@@ -1,0 +1,189 @@
+---
+title: "Recurrences"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("crqa",               # R packages needed here
+                     "devtools",
+                     "here",
+                     "magrittr",
+                     "nonlinearTseries",    # Update of nonlinearAnalysis
+                     "tidyverse")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 4 - Recurrences.Rmd") # To help find all the files.
+
+install_github("barneyricca/ndstools")      # Specialized NLTS tools
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+source(here("Scripts/plotRP.R"))            # This is the old RP from package:
+                                            #  crqa. I like it better than the
+                                            #  new version, although the new
+                                            #  version is easier to use.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+# Converting text sequence to numeric sequence
+Cleaning text is a pain. A helper function, cleanText(), is defined to make it a bit easier.
+
+If you have rectangular numeric data (e.g., from a spreadsheet), you can skip this part.
+
+```{r cleanText}
+#| include: FALSE
+
+# ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+#                                                                       #
+# cleanText is a little helper function to clean up the text from the   #
+#  lyrics and return a series of numbers.                               #
+#  Courtesy of Aaron Likens (with some BPR modifications)               #
+#                                                                       #
+# x must be a single long character string that contains the text to be #
+#  cleaned. I think this only works for UTF-8 encoding, though.         #
+#                                                                       #
+# ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+
+cleanText = function(x) {              # User-defined function
+  require(tm)                          # package::tm has many text manipulation
+                                       #  functions used here.
+  rawText = gsub('\\n',' ',x)          # Get rid of the new line breaks
+  rawText = gsub('\\r',' ',x)          # Get rid of any hard returns
+  ts = Corpus(VectorSource(rawText))   # Create a time series dictionary 
+                                       #  from the text.
+  ts = tm_map(ts, removePunctuation)   # Yep, remove the punctuation 
+  ts = tm_map(ts, removeNumbers)       # Remove numbers
+  ts = tm_map(ts, tolower)             # Make everything lower case
+  ts = tm_map(ts, stripWhitespace)     # Get rid of white spaces
+  ts = tm_map(ts, stemDocument)        # Reduce words to their stems
+  ts = tm_map(ts, PlainTextDocument)   # Make it all plain text
+  ts = as.character(ts[[1]])           # Get the words as a string of numbers
+  words = unlist(strsplit(ts, ' '))    # Break each number into a separate
+                                       #  entry.
+  return(words)                        # Send back the vector of word numbers
+}
+```
+
+
+```{r prepText}
+#| include: FALSE
+#| eval: FALSE
+
+require(readtext)                           # package:readtext is required!
+
+# ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+#                                                                       #
+#               USE YOUR OWN FILE IN THE NEXT COMMAND!                  #
+#                                                                       #
+# After that, go up to the beginning of this chunk and remove the line  #
+#  that begins "#| eval: FALSE".                                        #
+#                                                                       #
+# ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ###
+readtext::readtext(<your text file here>)$text -> 
+  textIn
+
+suppressWarnings(cleanText(textIn)) ->      # Clean the text
+  textIn
+unique(textIn) -> unique_words              # Get a list of unique words
+
+# Derive a an ordered sequence that characterizes words in terms of their
+#  order of appearance. Duplicates retain the same number:
+as.vector(                                  # Need a vector, not a list
+  sapply(textIn,                            # Apply to every word
+         function(x) {                      # Which unique word is x?
+           which(x == unique_words)})) ->   # Make these into a series
+  word_series                               # word_series is a numeric vector
+                                            #  suitable for RQA.
+
+```
+
+
+# RQA of Text (Songs)
+Because of copyright issues, I am NOT including the data files for these songs. I have, however, put the word_series for two Beatles songs, *Let It Be* and *Revolution*, in the data folder. These data have already been cleaned and converted to numeric sequences.
+```{r}
+load(here("Data/Let It Be words.RData"))    # lib_words
+load(here("Data/Revolution words.RData"))   # rev_words
+```
+
+If you use your own data, you must clean it according to the process in the previous section.
+
+```{r}
+rqa(time.series = lib_words,
+    embedding.dim = 1,
+    time.lag = 1,
+    radius = 1,
+    lmin = 1,
+    vmin = 2,
+#    save.RM = TRUE,
+    do.plot = TRUE) ->
+  lib_rqa
+
+crqa(ts1 = lib_words,
+     ts2 = lib_words,
+     delay = 1,
+     embed = 1,
+     rescale = 0,
+     radius = 0.05,
+     normalize = 0,
+     whiteline = FALSE,
+     mindiagline = 2,
+     minvertline = 2,
+     tw = 0,
+     method = "rqa",
+     side = "both") ->
+  lib_crqa
+
+plot_rp(lib_crqa$RP)
+```
+Using the old crqa::plotRP:
+```{r RQA_plot}
+# set plot parameters for the recurrence plot
+list(unit = 40,
+     labelx = "Time", 
+     labely = "Time", 
+     cols = "blue", 
+     pcex = .4, 
+     pch = 16, 
+     labax = seq(0, 
+                 nrow(lib_rqa$recurrence.matrix),
+                 40), 
+     labay = seq(0,
+                 nrow(lib_rqa$recurrence.matrix), 
+                 40), 
+     las = 1) -> 
+  plot_params
+
+plotRP(lib_rqa$recurrence.matrix, 
+       plot_params) # generate recurrence plot
+```
+
+
+```{r moreData}
+read.csv(here("NY Scarlet Fever.RData"))
+read.csv(here("Data/econ.csv")) ->          # Interest and inflation for CRQA
+  econ_df
+read.csv(here("Data/Lynx and Hare.csv")) -> 
+  lh_df
+read.csv(here("Data/Mayport.csv")) -> 
+  mp_df
+read.csv(here("Data/Walking sample.csv")) -># Infant learning to walk
+  walk_df
+
+```
+

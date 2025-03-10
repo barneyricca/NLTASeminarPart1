@@ -1,0 +1,280 @@
+---
+title: "Population Models"
+output: word_document
+date: "2025-01-16"
+---
+
+
+```{r setup}
+#| include: FALSE
+knitr::opts_chunk$set(echo = TRUE)
+
+for(packageName in c("devtools",            # R packages needed here
+                     "here",
+                     "magrittr",
+                     "tidyverse",
+                     "tseries")) {
+  if(!is.element(packageName,               # If package is NOT installed...
+                 installed.packages()[,1])) {
+    install.packages(packageName)           #  ...then install it.
+  }
+  library(packageName,                      # Add package to environment
+          character.only=TRUE,
+          quietly=TRUE,
+          verbose=FALSE)
+}
+
+i_am("Scripts/Session 2 - Population Models.Rmd")# To help find all the files.
+
+install_github("barneyricca/ndstools")    # Specialized NLTS tools
+library(ndstools)
+
+source(here("Scripts/Folders.R"))           # Make sure folders exist.
+
+options(show.signif.stars = FALSE)          # Don't stargaze
+options(digits = 3)                         # Round to 3 digits by default
+```
+
+# Linear population model
+
+The model:
+
+$x_{t+1} = b x_t - d x_t = r x_t$
+
+where *b* is the birth rate, *d* is the death rate, and *r* is the overall rate of change of population.
+
+```{r linear_pop_gen}
+lin_pop_gen <- function(x0 = 10,
+                        r = 1.0,
+                        num_gen = 30,
+                        noise = FALSE,
+                        noise_lev = 1) {
+
+  vector(mode = "numeric",
+         length = num_gen) ->
+    x
+  x0 -> 
+    x[1]
+
+  if(noise == TRUE) {
+    for(index in 2:num_gen) {
+      r * x[index - 1] + 
+        rnorm(1,
+              mean = 0,
+              sd = noise_lev) ->
+        x[index]
+    }
+  } else {
+    for(index in 2:num_gen) {
+      r * x[index - 1] ->
+        x[index]
+    }
+  }
+  return(x)
+}
+
+```
+
+b) Show the fixed points and stabilities. r values to use: -1.2, -1, -0.5, 0, 0.5, 1, 1.2. See what types of behaviors result.
+
+```{r lin_pop_plots}
+set.seed(42)                                # For the case of adding noise
+
+for(R in c(-1.2, -1 ,-0.5, 0, 0.5, 1, 1.2)) {
+  lin_pop_gen(r = R) ->
+    x
+  {
+    plot(1:length(x),
+         x,
+         xlab = "Generation",
+         ylab = "Population",
+         main = paste0("Growth rate: ", R))
+    lines(1:length(x),
+          x)
+  }  
+}
+
+```
+
+Here's another way to plot the data, a *cobweb* plot. This can be useful in helping to understand some of the transient behaviors.
+
+```{r cobwebs}
+for(R in c(-1.2, -1 ,-0.5, 0, 0.5, 1, 1.2)) {
+  lin_pop_gen(r = R) ->
+    x
+  cobweb(x = x, title = paste("Growth rate:", R))
+}
+```
+
+What about the (delay) state space? For a delay of 1 time step, that's just every other point of the cobweb plot. Or, do this type of thing
+
+```{r LinearStateSpace}
+lin_pop_gen(r = 0.5) -> x
+plot(x = x[-length(x)],
+     y = x[-1],
+     type = 'l')
+points(x = x[-length(x)],
+       y = x[-1])
+
+```
+
+# Nonlinear Population Model
+
+We'll look at the logistic map in a fair bit of detail, as it demonstrates most of the issues we're wanting to look at.
+
+First, we need to be able to generate the data:
+
+```{r logisticMap}
+log_map <- function(x0 = 0.7,               # Initial value in [0,1]
+                    R = 3.2,                # Growth parameter in [0,4]
+                    len = 500,              # Number of generations
+                    trans_len = 0,          # Length of transient
+                    noise = FALSE,          # Add noise?
+                    noise_lev = 0) {        # sd of added noise
+
+  rep(0, len) ->
+    x
+  x0 -> x[1]
+  if(noise == FALSE) {
+    for(index in 2:len) {
+      R * x[index-1] * (1 - x[index-1]) ->
+        x[index]
+    }
+  } else {
+    rnorm(len, 0, noise_lev) ->
+      xn
+    for(index in 2:len) {
+      R * x[index-1] * (1 - x[index-1]) + xn[index-1] ->
+        x[index]
+    }
+  }
+  return(x)
+}
+
+```
+
+Now, we can plot the time-series data:
+
+```{r timePlots}
+set.seed(42)
+
+for(R in c(.5, 1.5 , 2.5, 3.1, 3.47, 3.6, 4)) {
+  log_map(R = R,
+          len = 150) ->
+    x
+  {
+    plot(1:length(x),
+         x,
+         xlab = "Generation",
+         ylab = "Population",
+         main = paste0("Growth rate: ", R),
+         ylim = c(0,1),                     # So all can be compared
+         pch = 16,
+         cex = 0.6)
+    lines(1:length(x),
+          x)
+  }  
+}
+
+```
+
+To note:
+
+- Behaviors
+- Transient times
+
+We can also create cobweb plots:
+
+```{r}
+for(R in c(.5, 1.5 , 2.5, 3.1, 3.47, 3.6, 4)) {
+  log_map(R = R,
+          len = 150) ->
+    x
+  cobweb(x = x, r = R)
+}
+
+```
+
+Back to the slides for a moment...
+
+Let's look at fixed points. Here are the stable fixed points for the logistic map, using a *bifurcation map*. What happens to the fixed points (location and stability) as *R* varies from 0 to 4?
+
+```{r createBifurcationData}
+
+# Create data...lots of data...of the long-term behavior of the time-series.
+#  The long-term behavior will likely be only the fixed points of the map.
+2000 ->
+  vec_len
+1001 ->
+  num_pts
+
+list() ->
+  bif_ls
+
+seq(from = 0,
+    to = 4.0,
+    length.out = num_pts) ->
+  R
+
+vector(mode = "numeric",
+       length = vec_len) ->
+  x
+
+for(ls_index in 1:num_pts) {
+  R[ls_index] ->
+    r
+  0.5 -> 
+    x_trans
+  for(index in 1:100) {
+    r * x_trans * (1 - x_trans) -> 
+      xtrans
+  }
+  x_trans ->
+    x[1]
+  for(index in 2:vec_len) {
+    r * x[index-1] * (1 - x[index-1]) ->
+      x[index]
+  }
+  unique(x[-c(1:400)]) ->                   # Some transients are looooong
+    bif_ls[[ls_index]]
+}
+
+```
+
+```{r plot bifurcation}
+plot(0,0,
+     xlab = "R",
+     ylab = "x",
+     xlim = c(0,4),
+     ylim = c(0,1))
+for(index in 1:num_pts) {
+  points(rep(R[index], length(bif_ls[[index]])),
+         bif_ls[[index]],
+         pch = 16,
+         cex = 0.15)
+}
+
+```
+What does this mean?
+
+Incidentally, we have the fixed points for each value of R in the bif_ls[[]] list.
+
+Let's look at the behavior of the unstable fixed points on one side of the bifurcation. Look near R = 3, and near R = 3.44949. (Really, the latter is $1 + \sqrt{6}$.) Look at time series plots and cobweb plots.
+```{r}
+
+```
+
+Let's look at the lengths of transients near and not near bifurcation points.
+We'll try R = 2.5 and R = 3.2 as being "not near" bifurcation points, and near R = 1, 3, and 3.44949 as being "near" bifurcation points. Again, look at time series plots and cobweb plots, but this time do so before the transients are removed.
+
+```{r}
+
+```
+
+What tests can we do? We'll look at these in detail as the seminar moves on but here is the BDS test. This test assumes a null hypothesis that the data are generated by a random (stochastic) process. The output is a matrix of *p*-values for various *embedding dimensions* (more shortly) at different levels of assumed noise.
+```{r tests}
+bds.test(x)$p.value
+```
+
+
+
